@@ -109,6 +109,10 @@ func (h *proxyHTTPHandler) lookupProxy(r *http.Request) (*url.URL, error) {
 }
 
 func (h *proxyHTTPHandler) doConnectProxy(w http.ResponseWriter, r *http.Request) {
+	h.doConnectProxyImpl(w, r, true)
+}
+
+func (h *proxyHTTPHandler) doConnectProxyImpl(w http.ResponseWriter, r *http.Request, retry bool) {
 	var (
 		clientConn net.Conn
 		serverConn net.Conn
@@ -125,16 +129,14 @@ func (h *proxyHTTPHandler) doConnectProxy(w http.ResponseWriter, r *http.Request
 	if proxyURL == nil {
 		serverConn, err = h.dialer.Dial("tcp", r.URL.Host)
 		if err != nil {
-			log.Printf("HTTP Connect Proxy %q: %d %s", r.URL, http.StatusBadGateway, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			h.handleConnectError(err, w, r, retry)
 			return
 		}
 		defer serverConn.Close()
 	} else {
 		serverConn, err = h.dialer.Dial("tcp", proxyURL.Hostname()+":"+proxyURL.Port())
 		if err != nil {
-			log.Printf("HTTP Connect Proxy %q: %d %s", r.URL, http.StatusBadGateway, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			h.handleConnectError(err, w, r, retry)
 			return
 		}
 		defer serverConn.Close()
@@ -172,6 +174,16 @@ func (h *proxyHTTPHandler) doConnectProxy(w http.ResponseWriter, r *http.Request
 		io.Copy(serverConn, clientConn)
 	}()
 	wg.Wait()
+}
+
+func (h *proxyHTTPHandler) handleConnectError(err error, w http.ResponseWriter, r *http.Request, retry bool) {
+	log.Printf("HTTP Connect Proxy %q: %d %s", r.URL, http.StatusBadGateway, err)
+	if retry {
+		h.proxyFinder.Reload()
+		h.doConnectProxyImpl(w, r, false)
+	} else {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	}
 }
 
 func (h *proxyHTTPHandler) doHTTPProxy(w http.ResponseWriter, r *http.Request) {

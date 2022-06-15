@@ -36,6 +36,7 @@ type Loader func() (string, error)
 // ProxyFinder for chosing the proxy for a URL
 type ProxyFinder interface {
 	FindProxyForURL(in *url.URL) (Proxies, error)
+	Reload() error
 }
 
 // ProxySelector for proxy selection
