@@ -26,6 +26,9 @@ func SmartLoader(thing string) Loader {
 				return HTTPLoader(parseURL)()
 			}
 		}
+		if _, registryErr := getRegistryValue(thing); registryErr == nil {
+			return RegistryLoader(thing)()
+		}
 		return FileLoader(thing)()
 	}
 }
@@ -54,5 +57,20 @@ func HTTPLoader(u *url.URL) Loader {
 			return "", err
 		}
 		return string(pac), nil
+	}
+}
+
+func RegistryLoader(registryPath string) Loader {
+	return func() (string, error) {
+		log.Printf("loading pac URL from registry \"%s\"", registryPath)
+		if registryURL, registryErr := getRegistryValue(registryPath); registryErr == nil {
+			if parseURL, parseErr := url.Parse(registryURL); parseErr == nil {
+				return HTTPLoader(parseURL)()
+			} else {
+				return "", parseErr
+			}
+		} else {
+			return "", registryErr
+		}
 	}
 }
