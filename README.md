@@ -56,25 +56,41 @@ no_proxy = localhost,127.0.0.1
 
 2. Install the `pacproxy.exe` binary
 
-   ```powershell
-   go install
-   ```
+At that point the `https_proxy` environment variable must set manually with the correct proxy. In order to find out which proxy should be used to download the `pacproxy` dependencies, you can use the `pactester.exe` tool that comes with the [pacparser](https://github.com/manugarg/pacparser/releases/) library.
+
+```powershell
+$pacUrl = Get-ItemPropertyValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" "AutoConfigURL"
+& curl --silent $pacUrl | pactester.exe -p - -u https://github.com
+```
+
+It should print the proxy that you will have to use to successfully download the dependencies.
+
+```
+PROXY proxy.example.com
+```
+
+Use that proxy to set the `https_proxy` environment variable.
+
+```powershell
+${Env:https_proxy} = "proxy.example.com"
+```
+
+Finally, install the`pacproxy.exe` binary.
+```powershell
+go install
+```
 
 3. Ensure that the `pacproxy.exe` binary has been successfully installed by checking the contents of the `$GOPATH\bin` directory:
 
    ```powerhell
-   dir "$(go env GOPATH)\bin"
+   $appDir = "$(go env GOPATH)\bin"
+   dir $appDir
    ```
 
 4. In an administrator PowerShell, create two Windows Services with [NSSM](https://nssm.cc/)
 
-   ```powershell
-   $appDir = "$(go env GOPATH)\bin"
-   $pacUrl = Get-ItemPropertyValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" "AutoConfigURL"
-   ```
-
    For http:
-
+   
    ```powershell
    nssm install PacProxyHttpSvc "$appDir\pacproxy.exe"
    nssm set PacProxyHttpSvc AppParameters "-l 127.0.0.1:24944 -s http -c $pacUrl -v"
