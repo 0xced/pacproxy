@@ -345,16 +345,24 @@ func (o *OttoEngine) Stop() error {
 }
 
 func (o *OttoEngine) Reload() error {
-	if err := o.Stop(); err != nil {
-		return err
-	}
-	if err := o.Start(); err != nil {
-		return err
+	if o.isStarted {
+		if err := o.Stop(); err != nil {
+			return err
+		}
+		if err := o.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (o *OttoEngine) FindProxyForURL(in *url.URL) (Proxies, error) {
+	if !o.isStarted {
+		if err := o.Start(); err != nil {
+			return Proxies{}, err
+		}
+	}
+
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
 

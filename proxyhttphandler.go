@@ -179,7 +179,9 @@ func (h *proxyHTTPHandler) doConnectProxyImpl(w http.ResponseWriter, r *http.Req
 func (h *proxyHTTPHandler) handleConnectError(err error, w http.ResponseWriter, r *http.Request, retry bool) {
 	log.Printf("HTTP Connect Proxy %q: %d %s", r.URL, http.StatusBadGateway, err)
 	if retry {
-		h.proxyFinder.Reload()
+		if reloadErr := h.proxyFinder.Reload(); reloadErr != nil {
+			log.Printf("Reload PAC error: %s", reloadErr)
+		}
 		h.doConnectProxyImpl(w, r, false)
 	} else {
 		http.Error(w, err.Error(), http.StatusBadGateway)
