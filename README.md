@@ -36,7 +36,8 @@ curl -I "https://www.example.com"
 
 ## Using pacproxy as a Windows Service
 
-ℹ️ The commands in this section should be executed with PowerShell.
+> [!IMPORTANT]  
+> The commands in this section should be executed with PowerShell.
 
 1. Configure `http_proxy` and `https_proxy` in the **Environment Variables** control panel (also optionally `no_proxy`)
 
@@ -75,7 +76,7 @@ Use that proxy to set the `https_proxy` environment variable.
 ${Env:https_proxy} = "proxy.example.com"
 ```
 
-Finally, install the`pacproxy.exe` binary.
+Finally, install the `pacproxy.exe` binary.
 ```powershell
 go install
 ```
@@ -112,6 +113,156 @@ go install
    nssm set PacProxyHttpsSvc Description "HTTPS proxy server running on 127.0.0.1:24945 for applications that don't support proxy auto-configuration"
    nssm start PacProxyHttpsSvc
    ```
+
+## Using pacproxy as a macOS Launch Agent
+
+Requirements
+
+```sh
+brew install go
+brew install pacparser
+```
+
+1. Configure the `http_proxy` and `https_proxy`  environment variables (also optionally `no_proxy`), for example in the `~/.zprofile` file.
+
+```sh
+export http_proxy=http://127.0.0.1:24944
+export https_proxy=http://127.0.0.1:24945
+export no_proxy=localhost,127.0.0.1
+```
+
+2. Install the `pacproxy` binary
+
+At that point the `https_proxy` environment variable must set manually with the correct proxy. In order to find out which proxy should be used to download the `pacproxy` dependencies, you can use the `pactester` tool that comes with the [pacparser](https://github.com/manugarg/pacparser/releases/) library.
+
+```sh
+unset http_proxy
+unset https_proxy
+unset no_proxy
+pacUrl=$(scutil --proxy | grep "ProxyAutoConfigURLString : " | awk -F "ProxyAutoConfigURLString : " '{print $2}')
+curl --silent $pacUrl | pactester -p - -u https://github.com
+```
+
+It should print the proxy that you will have to use to successfully download the dependencies.
+
+```
+PROXY proxy.example.com:80
+```
+
+Use that proxy to set the `https_proxy` environment variable.
+
+```sh
+export https_proxy="proxy.example.com:80"
+```
+
+Finally, install the `pacproxy` binary.
+```sh
+go install
+```
+
+3. Ensure that the `pacproxy` binary has been successfully installed by checking the contents of the `$GOPATH/bin` directory:
+
+```sh
+appDir="$(go env GOPATH)/bin"
+ls -al $appDir
+```
+
+4. Create then load the Launch Agents
+
+For http:
+
+```sh
+cat <<EOF > ${HOME}/Library/LaunchAgents/PacProxyHttpSvc.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>${appDir}</string>
+	</dict>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<true/>
+	</dict>
+	<key>Label</key>
+	<string>PacProxyHttpSvc</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>./pacproxy</string>
+		<string>-l</string>
+		<string>127.0.0.1:24944</string>
+		<string>-s</string>
+		<string>http</string>
+		<string>-c</string>
+		<string>${pacUrl}</string>
+		<string>-v</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>pacproxy_http.log</string>
+	<key>WorkingDirectory</key>
+	<string>${appDir}</string>
+</dict>
+</plist>
+EOF
+```
+
+```sh
+launchctl load -w ${HOME}/Library/LaunchAgents/PacProxyHttpSvc.plist
+```
+
+For https:
+
+```sh
+cat <<EOF > ${HOME}/Library/LaunchAgents/PacProxyHttpsSvc.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>${appDir}</string>
+	</dict>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<true/>
+	</dict>
+	<key>Label</key>
+	<string>PacProxyHttpsSvc</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>./pacproxy</string>
+		<string>-l</string>
+		<string>127.0.0.1:24945</string>
+		<string>-s</string>
+		<string>https</string>
+		<string>-c</string>
+		<string>${pacUrl}</string>
+		<string>-v</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>pacproxy_https.log</string>
+	<key>WorkingDirectory</key>
+	<string>${appDir}</string>
+</dict>
+</plist>
+EOF
+```
+
+```sh
+launchctl load -w ${HOME}/Library/LaunchAgents/PacProxyHttpsSvc.plist
+```
+
+> [!NOTE]  
+> The Launch Agents plists were generated with [Lingon](https://www.peterborgapps.com/lingon/).
 
 ## License
 
